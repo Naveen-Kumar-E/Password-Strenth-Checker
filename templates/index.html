@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Password Strength Analyzer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f13;
+    --surface: #17171d;
+    --surface2: #1f1f28;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #e8e8f0;
+    --muted: #7a7a90;
+    --accent: #7f77dd;
+    --accent2: #534ab7;
+    --green: #1d9e75;
+    --amber: #ef9f27;
+    --red: #e24b4a;
+    --coral: #d85a30;
+    --mono: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    padding: 2rem 1rem;
+  }
+
+  .container { max-width: 800px; margin: 0 auto; }
+
+  header { margin-bottom: 2rem; }
+  header h1 {
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: -0.5px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  header h1 span.icon {
+    font-size: 20px;
+    background: var(--surface2);
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  header p { color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+  .input-wrap {
+    position: relative;
+    margin-bottom: 1.5rem;
+  }
+  .input-wrap input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: 14px 100px 14px 16px;
+    font-family: var(--mono);
+    font-size: 16px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .input-wrap input:focus { border-color: var(--accent); }
+  .input-wrap input::placeholder { color: var(--muted); }
+  .input-btns {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    display: flex; gap: 6px;
+  }
+  .input-btns button {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .input-btns button:hover { color: var(--text); border-color: var(--border2); }
+
+  .strength-bar-wrap { margin-bottom: 1.5rem; }
+  .strength-row {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 6px; font-size: 12px;
+  }
+  #strengthLabel { font-weight: 500; font-size: 14px; }
+  #entropyLabel { color: var(--muted); }
+  .bar-track {
+    height: 5px; background: var(--surface2);
+    border-radius: 3px; overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%; border-radius: 3px;
+    transition: width 0.4s cubic-bezier(.4,0,.2,1), background 0.4s;
+    width: 0%; background: var(--muted);
+  }
+
+  .grid-4 {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 10px; margin-bottom: 1.5rem;
+  }
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .metric-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; }
+  .metric-value { font-size: 20px; font-weight: 500; color: var(--text); }
+  .metric-sub { font-size: 10px; color: var(--muted); margin-top: 3px; }
+
+  .section { margin-bottom: 1.5rem; }
+  .section-label {
+    font-size: 10px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.7px; margin-bottom: 10px;
+  }
+
+  .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .check {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--muted);
+  }
+  .check-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--border2); flex-shrink: 0;
+    transition: background 0.2s;
+  }
+  .check-dot.pass { background: var(--green); }
+
+  .patterns { display: flex; flex-wrap: wrap; gap: 6px; }
+  .badge {
+    font-size: 11px; padding: 3px 9px;
+    border-radius: 5px; border: 1px solid transparent;
+  }
+  .badge-warn { background: #2a1f00; border-color: #5a3800; color: #ef9f27; }
+  .badge-bad  { background: #2a0a0a; border-color: #5a1a1a; color: #e24b4a; }
+  .badge-good { background: #0a2a1a; border-color: #0f5a35; color: #1d9e75; }
+  .badge-info { background: #0a0f2a; border-color: #1a2f6a; color: #7f77dd; }
+
+  .hashes { display: flex; flex-direction: column; gap: 6px; }
+  .hash-row {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .hash-algo { font-size: 10px; color: var(--muted); min-width: 55px; text-transform: uppercase; }
+  .hash-val {
+    font-size: 11px; color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+  }
+  .copy-btn {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 11px; padding: 2px 6px; border-radius: 4px;
+    transition: color 0.15s;
+  }
+  .copy-btn:hover { color: var(--text); }
+
+  .crack-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+  .tab-btn {
+    font-size: 11px; padding: 5px 12px;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); cursor: pointer; border-radius: 6px;
+    font-family: var(--mono); transition: all 0.15s;
+  }
+  .tab-btn.active {
+    background: var(--surface2); border-color: var(--border2); color: var(--text);
+  }
+
+  .crack-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px;
+  }
+  .crack-time { font-size: 24px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+  .crack-desc { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 14px; }
+
+  .progress-section {}
+  .prog-row {
+    display: flex; justify-content: space-between;
+    font-size: 11px; color: var(--muted); margin-bottom: 4px;
+  }
+  .prog-track { height: 4px; background: var(--surface2); border-radius: 2px; }
+  .prog-fill {
+    height: 100%; border-radius: 2px; background: var(--accent);
+    transition: width 0.4s;
+  }
+
+  .chart-bars { display: flex; align-items: flex-end; gap: 8px; height: 90px; margin-bottom: 6px; }
+  .chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .chart-col-bar { width: 100%; border-radius: 3px 3px 0 0; min-height: 2px; }
+  .chart-col-lbl { font-size: 9px; color: var(--muted); }
+  .chart-col-val { font-size: 9px; color: var(--muted); }
+  .chart-note { font-size: 10px; color: var(--muted); text-align: center; }
+
+  .suggestions { display: flex; flex-direction: column; gap: 6px; }
+  .suggestion {
+    background: var(--surface); border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px; padding: 10px 14px;
+    font-size: 12px; color: var(--muted); line-height: 1.5;
+  }
+
+  .loading { color: var(--muted); font-size: 13px; padding: 8px 0; display: none; }
+  .error-msg { color: var(--red); font-size: 12px; padding: 8px 0; display: none; }
+
+  .hidden { display: none; }
+
+  .api-section { margin-top: 2rem; }
+  .api-block {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px;
+  }
+  .api-block pre {
+    font-size: 12px; color: var(--muted); line-height: 1.7;
+    overflow-x: auto; white-space: pre-wrap;
+  }
+  .api-block .key { color: #7f77dd; }
+  .api-block .str { color: #1d9e75; }
+  .api-block .num { color: #ef9f27; }
+
+  @media (max-width: 560px) {
+    .grid-4 { grid-template-columns: 1fr 1fr; }
+    .checks { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1><span class="icon">🔐</span> Password Strength Analyzer</h1>
+    <p>entropy · hashing · crack-time simulation · pattern detection</p>
+  </header>
+
+  <div class="input-wrap">
+    <input type="password" id="pwInput" placeholder="type a password to analyze..." autocomplete="off" spellcheck="false" />
+    <div class="input-btns">
+      <button onclick="toggleVis()" id="toggleBtn">show</button>
+      <button onclick="generateRandom()">random</button>
+    </div>
+  </div>
+
+  <div class="loading" id="loading">analyzing...</div>
+  <div class="error-msg" id="errorMsg"></div>
+
+  <div id="results" class="hidden">
+
+    <div class="strength-bar-wrap">
+      <div class="strength-row">
+        <span id="strengthLabel" style="color:#888">—</span>
+        <span id="entropyLabel">entropy: — bits</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" id="strengthBar"></div></div>
+    </div>
+
+    <div class="grid-4">
+      <div class="metric">
+        <div class="metric-label">Length</div>
+        <div class="metric-value" id="mLen">—</div>
+        <div class="metric-sub">characters</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Char Pool</div>
+        <div class="metric-value" id="mPool">—</div>
+        <div class="metric-sub">unique symbols</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Unique Chars</div>
+        <div class="metric-value" id="mUniq">—</div>
+        <div class="metric-sub">in password</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Score</div>
+        <div class="metric-value" id="mScore">—</div>
+        <div class="metric-sub">out of 100</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Requirements</div>
+      <div class="checks" id="checks"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Pattern Detection</div>
+      <div class="patterns" id="patterns"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Hashes (do not use MD5/SHA-1 for password storage)</div>
+      <div class="hashes" id="hashes"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Crack Time Simulation</div>
+      <div class="crack-tabs" id="crackTabs"></div>
+      <div class="crack-card">
+        <div class="crack-time" id="crackTime">—</div>
+        <div class="crack-desc" id="crackDesc">—</div>
+        <div class="progress-section">
+          <div class="prog-row">
+            <span>attacker progress (log scale)</span>
+            <span id="progPct">—</span>
+          </div>
+          <div class="prog-track"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+          <div class="prog-row" style="margin-top:4px">
+            <span id="avgGuesses">—</span>
+            <span id="crackSpeed">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Brute-force time vs password length</div>
+      <div class="crack-card" style="padding:14px">
+        <div class="chart-bars" id="chartBars"></div>
+        <div class="chart-note">password length (chars) · pool=95 · 10B guesses/sec</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Suggestions</div>
+      <div class="suggestions" id="suggestions"></div>
+    </div>
+
+  </div><!-- /results -->
+
+  <div class="api-section">
+    <div class="section-label">API endpoints (local)</div>
+    <div class="api-block">
+      <pre>
+<span class="key">POST</span> <span class="str">/analyze</span>
+  body: { <span class="key">"password"</span>: <span class="str">"yourpassword"</span> }
+
+<span class="key">POST</span> <span class="str">/batch</span>
+  body: { <span class="key">"passwords"</span>: [<span class="str">"pw1"</span>, <span class="str">"pw2"</span>] }
+
+<span class="str">curl</span> -X POST http://localhost:5000/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"password":"MyP@ssword!"}'
+      </pre>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+let currentData = null;
+let currentTab = 0;
+let debounceTimer = null;
+
+function toggleVis() {
+  const inp = document.getElementById('pwInput');
+  const btn = document.getElementById('toggleBtn');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  btn.textContent = inp.type === 'password' ? 'show' : 'hide';
+}
+
+function generateRandom() {
+  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+';
+  const len = Math.floor(Math.random() * 8) + 12;
+  let pw = '';
+  for (let i = 0; i < len; i++) pw += charset[Math.floor(Math.random() * charset.length)];
+  document.getElementById('pwInput').value = pw;
+  document.getElementById('pwInput').type = 'text';
+  document.getElementById('toggleBtn').textContent = 'hide';
+  triggerAnalyze(pw);
+}
+
+function formatTime(s) {
+  if (s === 'infinity' || s === Infinity || s > 1e30) return 'not feasible';
+  if (s < 0.001) return 'instant';
+  if (s < 1) return (s * 1000).toFixed(1) + ' ms';
+  if (s < 60) return s.toFixed(1) + ' seconds';
+  if (s < 3600) return (s/60).toFixed(1) + ' minutes';
+  if (s < 86400) return (s/3600).toFixed(1) + ' hours';
+  if (s < 86400*365) return (s/86400).toFixed(1) + ' days';
+  const y = s / (86400*365);
+  if (y < 1e3) return y.toFixed(1) + ' years';
+  if (y < 1e6) return (y/1e3).toFixed(1) + ' thousand years';
+  if (y < 1e9) return (y/1e6).toFixed(1) + ' million years';
+  if (y < 1e12) return (y/1e9).toFixed(1) + ' billion years';
+  return 'age of universe+';
+}
+
+function crackTimeForLen(len) {
+  return Math.pow(95, len) / 1e10 / 2;
+}
+
+function formatTiny(s) {
+  if (s < 1) return '<1s';
+  if (s < 60) return Math.round(s) + 's';
+  if (s < 3600) return Math.round(s/60) + 'm';
+  if (s < 86400) return Math.round(s/3600) + 'h';
+  if (s < 86400*365) return Math.round(s/86400) + 'd';
+  const y = s/(86400*365);
+  if (y < 1e3) return Math.round(y) + 'y';
+  if (y < 1e6) return (y/1e3).toFixed(0) + 'ky';
+  if (y < 1e9) return (y/1e6).toFixed(0) + 'My';
+  return '∞';
+}
+
+function renderResults(d) {
+  currentData = d;
+  document.getElementById('results').classList.remove('hidden');
+
+  // Strength bar
+  const colors = { 'very weak':'#e24b4a','weak':'#d85a30','fair':'#ef9f27','strong':'#1d9e75','very strong':'#1d9e75' };
+  const widths = { 'very weak':12,'weak':30,'fair':54,'strong':74,'very strong':96 };
+  const col = colors[d.level] || '#888';
+  document.getElementById('strengthLabel').textContent = d.level;
+  document.getElementById('strengthLabel').style.color = col;
+  document.getElementById('entropyLabel').textContent = `entropy: ${d.entropy_bits} bits`;
+  document.getElementById('strengthBar').style.width = (widths[d.level] || 0) + '%';
+  document.getElementById('strengthBar').style.background = col;
+
+  // Metrics
+  document.getElementById('mLen').textContent = d.char_analysis.length;
+  document.getElementById('mPool').textContent = d.char_analysis.pool_size;
+  document.getElementById('mUniq').textContent = d.char_analysis.unique_chars;
+  document.getElementById('mScore').textContent = d.score;
+
+  // Checks
+  const checkDefs = [
+    { label: '≥ 8 characters', pass: d.char_analysis.length >= 8 },
+    { label: '≥ 12 characters', pass: d.char_analysis.length >= 12 },
+    { label: 'uppercase', pass: d.char_analysis.has_uppercase },
+    { label: 'lowercase', pass: d.char_analysis.has_lowercase },
+    { label: 'number', pass: d.char_analysis.has_digits },
+    { label: 'special char', pass: d.char_analysis.has_symbols },
+  ];
+  document.getElementById('checks').innerHTML = checkDefs.map(c =>
+    `<div class="check"><div class="check-dot ${c.pass ? 'pass' : ''}"></div>${c.label}</div>`
+  ).join('');
+
+  // Patterns
+  const p = d.patterns;
+  const badges = [];
+  if (p.is_common) badges.push({ t: 'common password', c: 'badge-bad' });
+  if (p.has_repeated_chars) badges.push({ t: 'repeated chars', c: 'badge-warn' });
+  if (p.has_sequential) badges.push({ t: 'sequential', c: 'badge-warn' });
+  if (p.has_keyboard_walk) badges.push({ t: 'keyboard walk', c: 'badge-warn' });
+  if (p.has_date_pattern) badges.push({ t: 'date pattern', c: 'badge-warn' });
+  if (p.has_leet_speak) badges.push({ t: 'leet speak', c: 'badge-info' });
+  if (!badges.length) badges.push({ t: 'no weak patterns detected', c: 'badge-good' });
+  document.getElementById('patterns').innerHTML = badges.map(b =>
+    `<span class="badge ${b.c}">${b.t}</span>`
+  ).join('');
+
+  // Hashes
+  const h = d.hashes;
+  const hashRows = [
+    { algo: 'MD5', val: h.md5, warn: true },
+    { algo: 'SHA-1', val: h.sha1, warn: true },
+    { algo: 'SHA-256', val: h.sha256, warn: false },
+    { algo: 'SHA-512', val: h.sha512.substring(0, 48) + '...', warn: false },
+  ];
+  document.getElementById('hashes').innerHTML = hashRows.map(r =>
+    `<div class="hash-row">
+      <span class="hash-algo" style="color:${r.warn ? '#d85a30' : '#7a7a90'}">${r.algo}</span>
+      <span class="hash-val">${r.val}</span>
+      <button class="copy-btn" onclick="copyText('${r.algo === 'SHA-512' ? h.sha512 : r.val}', this)">copy</button>
+    </div>`
+  ).join('');
+
+  // Crack tabs
+  renderCrackTab(currentTab);
+  document.getElementById('crackTabs').innerHTML = d.crack_estimates.map((e, i) =>
+    `<button class="tab-btn ${i === currentTab ? 'active' : ''}" onclick="selectTab(${i})">${e.attack_type.toLowerCase()}</button>`
+  ).join('');
+
+  // Chart
+  renderChart(d.char_analysis.length);
+
+  // Suggestions
+  if (d.suggestions.length) {
+    document.getElementById('suggestions').innerHTML = d.suggestions.map(s =>
+      `<div class="suggestion">${s}</div>`
+    ).join('');
+  } else {
+    document.getElementById('suggestions').innerHTML = '<div class="suggestion">No issues found — excellent password!</div>';
+  }
+}
+
+function selectTab(i) {
+  currentTab = i;
+  document.querySelectorAll('.tab-btn').forEach((b, j) => b.classList.toggle('active', i === j));
+  renderCrackTab(i);
+}
+
+function renderCrackTab(i) {
+  if (!currentData) return;
+  const est = currentData.crack_estimates[i];
+  document.getElementById('crackTime').textContent = est.human_readable;
+  document.getElementById('crackDesc').textContent = est.description;
+
+  const s = est.seconds;
+  let pct = 5;
+  if (s === 'infinity' || s > 1e30) pct = 2;
+  else if (s < 0.001) pct = 99;
+  else if (s < 1) pct = 90;
+  else if (s < 60) pct = 78;
+  else if (s < 3600) pct = 65;
+  else if (s < 86400) pct = 52;
+  else if (s < 86400*365) pct = 40;
+  else if (s < 86400*365*1000) pct = 25;
+  else if (s < 86400*365*1e9) pct = 12;
+  else pct = 4;
+
+  document.getElementById('progFill').style.width = pct + '%';
+  document.getElementById('progPct').textContent = pct + '%';
+  document.getElementById('avgGuesses').textContent = (s === 'infinity' || s > 1e30 || !est.guesses_per_second) ? '—' : (s * est.guesses_per_second / 2).toExponential(1) + ' guesses (avg)';
+  document.getElementById('crackSpeed').textContent = est.guesses_per_second ? est.guesses_per_second.toLocaleString() + '/sec' : '—';
+}
+
+function renderChart(currentLen) {
+  const lengths = [4, 6, 8, 10, 12, 14, 16, 20];
+  const times = lengths.map(l => crackTimeForLen(l));
+  const maxLog = Math.log10(Math.max(...times, 1));
+
+  document.getElementById('chartBars').innerHTML = lengths.map((len, i) => {
+    const t = times[i];
+    const logT = Math.max(Math.log10(t + 0.0001), 0);
+    const h = Math.max((logT / maxLog) * 80, 2);
+    const isActive = currentLen > 0 && len <= currentLen && (i === lengths.length - 1 || currentLen < lengths[i + 1]);
+    const bg = isActive ? '#7f77dd' : t < 60 ? '#e24b4a' : t < 86400 * 365 ? '#ef9f27' : '#1d9e75';
+    return `<div class="chart-col">
+      <div class="chart-col-val">${formatTiny(t)}</div>
+      <div class="chart-col-bar" style="height:${h}px;background:${bg}"></div>
+      <div class="chart-col-lbl">${len}</div>
+    </div>`;
+  }).join('');
+}
+
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const old = btn.textContent;
+    btn.textContent = 'copied!';
+    setTimeout(() => btn.textContent = old, 1500);
+  });
+}
+
+async function triggerAnalyze(pw) {
+  if (!pw) {
+    document.getElementById('results').classList.add('hidden');
+    return;
+  }
+
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('errorMsg').style.display = 'none';
+
+  try {
+    const res = await fetch('/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    renderResults(data);
+  } catch (err) {
+    document.getElementById('errorMsg').style.display = 'block';
+    document.getElementById('errorMsg').textContent = 'Error: ' + err.message;
+    document.getElementById('results').classList.add('hidden');
+  } finally {
+    document.getElementById('loading').style.display = 'none';
+  }
+}
+
+document.getElementById('pwInput').addEventListener('input', e => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => triggerAnalyze(e.target.value), 300);
+});
+</script>
+</body>
+</html>
